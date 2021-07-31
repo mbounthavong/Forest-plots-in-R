@@ -1,0 +1,144 @@
+---
+title: "Forest plots in R"
+author: "Mark Bounthavong"
+date: "7/30/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Forest plots
+Forest plots are useful when summarizing the invidivual impact of studies on the pooled end points for meta analysis or illustrating the influence of coefficients in a regression model. More importantly, they visualize the direction and magnitude of the associations between the individual studies or coefficients on the outcomes. The most basic forest plots include a point that is shaped as a diamond, box, or circle with error bars or whiskers to indicate the 95% confidence intervals (CI).
+
+Here is an example of forest plots that I used for one of my past papers. These forest plots illustrate the impact of each coefficient in a logistic regression model and the 95% CIs. However, these forest plots were built using Stata, which is not avaialble to everyone. So, I decided to learn how to build forest plots using R. 
+
+```{r , echo=FALSE, fig.cap="Example of a forest plot", out.width = '75%'}
+knitr::include_graphics("/Users/mbounthavong/Dropbox/Marks blog/R - Forest plots/Figures/Forest plot - OR_A_B.png")
+```
+
+## Elements of a forest plot
+There are several elements that are used in forest plots. We will use an example forest plot to identify the major elements. The diamond $\blacklozenge$ represents the odds ratio or point estimate (Note: this can be another symbol other than a diamond, such as a circle or square). The error bars or whiskers $\vdash$ $\dashv$ represent the 95% CI of the odds ratio. The labels on the Y-axis represents the comparisions. For example, if the results were OR = 3.0; 95% CI: 2.25, 3.75, this means that High income earners have a 3-times greater odds of having an event than Low income earners (95% CI: 2.25, 3.75), which is statistically significant. The pink vertical line bisects the X-axis where the odds ratio is equal to 1 and represents the null. If any of the error bars cross the null, then the association is not statistically significant. 
+
+I provide the R code that I used to create this example. I use two libraries, `gridExtra` and `ggplot2`, both of which you can install using the following command: `install.packages("gridExtra")`.
+
+```{r}
+## Load libraries
+library(gridExtra)
+library(ggplot2)
+```
+
+## Data
+Data for the forest plot are generated as a data frame. (These data are not based on any real experiment, and they are only used for educational purposes.)
+```{r}
+## Example data frame
+dat <- data.frame(
+  Index = c(1, 2, 3, 4), ## This provides an order to the data
+  label = c("Age (65 and older versus <65)", "Male versus Female", "High income versus Low income", "High school or higher versus No High school"),
+  OR = c(1.00, 2.00, 3.00, 0.50),
+  LL = c(0.25, 0.90, 2.25, 0.2),
+  UL = c(1.75, 3.10, 3.75, 0.8),
+  CI = c("0.25, 1.75", "0.90, 3.10", "2.25, 3.75", "0.20, 0.80")
+)
+dat
+```
+
+## Forest plot
+Then the forest plot is created using `ggplot2`. 
+```{r}
+## Plot forest plot
+plot1 <- ggplot(dat, aes(y = Index, x = OR)) +
+  geom_point(shape = 18, size = 5) +  
+  geom_errorbarh(aes(xmin = LL, xmax = UL), height = 0.25) +
+  geom_vline(xintercept = 1, color = "red", linetype = "dashed", cex = 1, alpha = 0.5) +
+  scale_y_continuous(name = "", breaks=1:4, labels = dat$label, trans = "reverse") +
+  xlab("Odds Ratio (95% CI)") + 
+  ylab(" ") + 
+  theme_bw() +
+  theme(panel.border = element_blank(),
+        panel.background = element_blank(),
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(), 
+        axis.line = element_line(colour = "black"),
+        axis.text.y = element_text(size = 12, colour = "black"),
+        axis.text.x.bottom = element_text(size = 12, colour = "black"),
+        axis.title.x = element_text(size = 12, colour = "black"))
+plot1
+```
+
+
+## Adding a table to the forest plot
+Now that the forest plot has been constructed, we can add the text such as the "OR" and "95% CI" to the chart. To do this, we need to create separate tables that we will combine using `grid.arrange`. This of these tables a section or parts of a grid that we will put together. Another term that is used to described these parts is the grid graphical object or "grob". 
+
+Here is an example of how we will combine the grobs. Think of these are parts of a bigger picture. 
+```{r , echo=FALSE, out.width = '60%'}
+knitr::include_graphics("/Users/mbounthavong/Dropbox/Marks blog/R - Forest plots/Figures/Parts of a grid.png")
+```
+
+First, we create the table base, which we call `table_base`. Next, we create the table that contains the "OR" values and call it `tab1`. The second table contains the "95% CI" for the point estimates, which we call `tab2`. 
+
+This part is a little tricky. One of the issues with using this method is that the values on the "OR" and "95% CI" may not be aligned with the values on the plot. I added the following to the `table_base` to help with this alignment:  
+
+`axis.text.x = element_text(color="white", hjust = -3, size = 25)`
+
+This creates a text beneath the table base with font size = 25, but it's hidden because the colour is "white". I used a horizontal justification `hjust = -3` to move it away from the plot's X-axis so that there would not be any overlays of the text. 
+
+```{r, echo = TRUE, results = 'hide'}
+## Create the table-base pallete
+table_base <- ggplot(dat, aes(y=label)) +
+  ylab(NULL) + xlab("  ") + 
+  theme(plot.title = element_text(hjust = 0.5, size=12), 
+        axis.text.x = element_text(color="white", hjust = -3, size = 25), ## This is used to help with alignment
+        axis.line = element_blank(),
+        axis.text.y = element_blank(), 
+        axis.ticks = element_blank(),
+        axis.title.y = element_blank(), 
+        legend.position = "none",
+        panel.background = element_blank(), 
+        panel.border = element_blank(), 
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(), 
+        plot.background = element_blank())
+
+## OR point estimate table
+tab1 <- table_base + 
+  labs(title = "space") +
+  geom_text(aes(y = rev(Index), x = 1, label = sprintf("%0.1f", round(OR, digits = 1))), size = 4) + ## decimal places
+  ggtitle("OR")
+
+## 95% CI table
+tab2 <- table_base +
+  geom_text(aes(y = rev(Index), x = 1, label = CI), size = 4) + 
+  ggtitle("95% CI")
+
+```
+
+## Combining the elements of the forest plot
+After we've created all the tables, we create the matrix. The matrix size will be defined as `matrix(c(1,1,1,1,1,1,1,2,3,3)`. Finally, we combine the tables using `grid.arrange`.
+```{r}
+## Merge tables with plot
+lay <-  matrix(c(1,1,1,1,1,1,1,1,1,1,2,3,3), nrow = 1)
+grid.arrange(plot1, tab1, tab2, layout_matrix = lay)
+```
+
+## Conclusions
+This exercise provided me with insights on how best to generate a forest plot. I also realize that there are other ways to generate forest plots in R. For example, there is the `forestplot` package. But I wanted to build a forest plot using ggplot2 and then combine data elements (e.g., OR and 95% CI) into a single figure that is good enough for publication in a journal. There are additional aesthesics that could be done in the future such as adding alternate colours between the rows. However, I'll save that for another time. 
+
+## References
+Learning how to create forest plots using R involved searching through forums and reading posts. I'm amazed at the community of R coders who selflessly share their expeirences, wisdom, and codes. They were an indispensible aid in my pursuit for constructing forest plots in R. Here are some posts that I used and drew inspiration from. 
+
+Creating forest plots:  
+https://stackoverflow.com/questions/40265494/ggplot-grobs-align-with-tablegrob
+
+https://stackoverflow.com/questions/15420621/reproduce-table-and-plot-from-journal
+
+https://www.selfmindsociety.com/post/a-forest-plot-in-ggplot2
+
+Modifying elements in ggplot2:  
+https://rpubs.com/Mentors_Ubiqum/ggplot_remove_elements
+
+Adding decimals to values in a table:  
+https://stackoverflow.com/questions/38369855/how-to-put-exact-number-of-decimal-places-on-label-ggplot-bar-chart
+
+
